@@ -11,7 +11,7 @@ const {
 } = require('discord.js');
 
 // ===================================================
-// 1. SERVIDOR HTTP PARA MANTENER VIVO EL BOT EN RENDER
+// SERVIDOR HTTP PARA MANTENER VIVO EL BOT EN RENDER
 // ===================================================
 http.createServer((req, res) => {
   res.write("Bot ERCHI activo 24/7 en Render");
@@ -19,7 +19,7 @@ http.createServer((req, res) => {
 }).listen(process.env.PORT || 3000);
 
 // ===================================================
-// 2. CONFIGURACIÓN CENTRAL DE IDs Y VARIABLES
+// CONFIGURACIÓN CENTRAL DE IDs
 // ===================================================
 const CONFIG = {
   TOKEN: process.env.DISCORD_TOKEN,
@@ -28,8 +28,8 @@ const CONFIG = {
   CANAL_BIENVENIDA: '1552736136428785676',
   CATEGORIA_TICKETS: '1552736493179764766',
   
-  ROL_MIEMBRO: '155272955075211274',
-  ROL_NUEVO_USUARIO: '1552732528698200224',
+  ROL_MIEMBRO: '1552729555075211274',       // ID Corregido
+  ROL_NUEVO_USUARIO: '1552732528698200224',  // Rol No Verificado
   ROL_STAFF: '1552729476721414215',
   
   ROL_STRIKE_1: '1556293453187383378',
@@ -45,19 +45,19 @@ const client = new Client({
   ]
 });
 
-// Almacenamiento temporal en memoria
+// Bases de datos temporales
 const dbStrikes = new Map();
 const dbNiveles = new Map();
 
 // ===================================================
-// 3. EVENTO: BOT LISTO
+// EVENTO: BOT LISTO
 // ===================================================
 client.once('ready', () => {
   console.log(`🤖 Bot conectado exitosamente como: ${client.user.tag}`);
 });
 
 // ===================================================
-// 4. EVENTO: BIENVENIDA AUTOMÁTICA
+// EVENTO: BIENVENIDA AUTOMÁTICA
 // ===================================================
 client.on('guildMemberAdd', async (member) => {
   try {
@@ -79,7 +79,7 @@ client.on('guildMemberAdd', async (member) => {
 });
 
 // ===================================================
-// 5. EVENTO: COMANDOS Y SISTEMA DE NIVELES (XP)
+// EVENTO: COMANDOS Y SISTEMA DE NIVELES (XP)
 // ===================================================
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
@@ -97,7 +97,7 @@ client.on('messageCreate', async (message) => {
   }
   dbNiveles.set(userId, userData);
 
-  // --- Procesamiento de Comandos con Prefijo ---
+  // --- Comandos con Prefijo ---
   if (!message.content.startsWith(CONFIG.PREFIX)) return;
   const args = message.content.slice(CONFIG.PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
@@ -179,7 +179,7 @@ client.on('messageCreate', async (message) => {
 });
 
 // ===================================================
-// 6. EVENTO: BOTONES E INTERACCIONES
+// EVENTO: BOTONES E INTERACCIONES
 // ===================================================
 client.on('interactionCreate', async (interaction) => {
   if (interaction.isButton()) {
@@ -189,12 +189,12 @@ client.on('interactionCreate', async (interaction) => {
       try {
         const member = interaction.member;
 
-        // 1. Asignar el rol de miembro
+        // 1. Asignar rol de miembro
         if (CONFIG.ROL_MIEMBRO) {
           await member.roles.add(CONFIG.ROL_MIEMBRO);
         }
 
-        // 2. Retirar el rol inicial si lo posee
+        // 2. Retirar rol no verificado si lo posee
         if (CONFIG.ROL_NUEVO_USUARIO && member.roles.cache.has(CONFIG.ROL_NUEVO_USUARIO)) {
           await member.roles.remove(CONFIG.ROL_NUEVO_USUARIO);
         }
@@ -203,7 +203,7 @@ client.on('interactionCreate', async (interaction) => {
       } catch (err) {
         console.error('Error al verificar:', err);
         await interaction.reply({ 
-          content: `❌ Error al asignar roles: ${err.message || 'Falta de permisos o problema con la jerarquía de roles.'}`, 
+          content: `❌ Error al asignar roles: ${err.message}`, 
           ephemeral: true 
         });
       }
@@ -239,7 +239,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ content: `✅ Ticket creado: ${canalTicket}`, ephemeral: true });
       } catch (err) {
         console.error('Error al crear ticket:', err);
-        await interaction.reply({ content: '❌ No se pudo crear el canal de ticket. Revisa los permisos de categoría/canales.', ephemeral: true });
+        await interaction.reply({ content: '❌ No se pudo crear el canal de ticket.', ephemeral: true });
       }
     }
 
@@ -252,6 +252,6 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // ===================================================
-// 7. INICIO DE SESIÓN
+// INICIO DE SESIÓN
 // ===================================================
 client.login(CONFIG.TOKEN);
