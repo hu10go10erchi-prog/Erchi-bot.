@@ -49,6 +49,53 @@ const client = new Client({
 const dbStrikes = new Map();
 const dbNiveles = new Map();
 
+// ==========================================
+// MANEJADOR DE LOS BOTONES DE COMPRA
+// ==========================================
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isButton()) return;
+
+    if (interaction.customId.startsWith('buy_')) {
+        const productType = interaction.customId.replace('buy_', '').toUpperCase();
+        
+        // Crear canal de ticket de compra privado
+        try {
+            const canalTicket = await interaction.guild.channels.create({
+                name: `compra-${productType.toLowerCase()}-${interaction.user.username}`,
+                type: ChannelType.GuildText,
+                parent: CONFIG.CATEGORIA_TICKETS,
+                permissionOverwrites: [
+                    { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+                    { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+                    { id: CONFIG.ROL_STAFF, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+                ]
+            });
+
+            const embedCompra = new EmbedBuilder()
+                .setTitle(`🛒 Solicitud de Compra - LICENCIA ${productType}`)
+                .setDescription(`¡Hola ${interaction.user}! Gracias por tu interés en **ERCHI | OPTIMIZADOR**.\n\n` +
+                                `Por favor, realiza el pago correspondiente y adjunta la captura en este ticket:\n` +
+                                `• **PayPal**: tu_paypal@ejemplo.com\n` +
+                                `• **Bizum**: +34 600 000 000\n\n` +
+                                `Un Administrador verificará el pago para activarte la Key y tus roles automáticamente.`)
+                .setColor('#00FF00');
+
+            const btnCerrar = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId('btn_cerrar_ticket')
+                    .setLabel('Cerrar Ticket')
+                    .setStyle(ButtonStyle.Danger)
+            );
+
+            await canalTicket.send({ content: `<@${interaction.user.id}> <@&${CONFIG.ROL_STAFF}>`, embeds: [embedCompra], components: [btnCerrar] });
+            await interaction.reply({ content: `✅ Ticket de compra creado con éxito: ${canalTicket}`, ephemeral: true });
+
+        } catch (error) {
+            console.error('Error al crear ticket de compra:', error);
+            await interaction.reply({ content: '❌ Hubo un error al intentar crear tu ticket de compra.', ephemeral: true });
+        }
+    }
+});
 // ===================================================
 // EVENTO: BOT LISTO
 // ===================================================
