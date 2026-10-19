@@ -9,7 +9,12 @@ const {
     ChannelType,
     PermissionFlagsBits
 } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
 
+// ===================================================
+// SERVIDOR HTTP PARA MANTENER VIVO EL BOT EN RENDER
+// ===================================================
 http.createServer((req, res) => {
     res.write("Bot ERCHI activo 24/7 en Render");
     res.end();
@@ -25,8 +30,8 @@ const CONFIG = {
   CANAL_BIENVENIDA: '1552736136428785676',
   CATEGORIA_TICKETS: '1552736493179764766',
   
-  ROL_MIEMBRO: '1552729555075211274',       // ID Corregido
-  ROL_NUEVO_USUARIO: '1552732528698200224',  // Rol No Verificado
+  ROL_MIEMBRO: '1552729555075211274',
+  ROL_NUEVO_USUARIO: '1552732528698200224',
   ROL_STAFF: '1552729476721414215',
   
   ROL_STRIKE_1: '1556293453187383378',
@@ -47,52 +52,56 @@ const dbStrikes = new Map();
 const dbNiveles = new Map();
 
 // ==========================================
-// MANEJADOR DE LOS BOTONES DE COMPRA
+// MÓDULO DE CLIENTES Y ROLES ACUMULATIVOS
 // ==========================================
-client.on('interactionCreate', async interaction => {
-    if (!interaction.isButton()) return;
+const PURCHASES_FILE = path.join(__dirname, 'purchases.json');
 
-    if (interaction.customId.startsWith('buy_')) {
-        const productType = interaction.customId.replace('buy_', '').toUpperCase();
-        
-        // Crear canal de ticket de compra privado
-        try {
-            const canalTicket = await interaction.guild.channels.create({
-                name: `compra-${productType.toLowerCase()}-${interaction.user.username}`,
-                type: ChannelType.GuildText,
-                parent: CONFIG.CATEGORIA_TICKETS,
-                permissionOverwrites: [
-                    { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                    { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-                    { id: CONFIG.ROL_STAFF, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-                ]
-            });
+const ROLE_TIERS = [
+    { name: 'Cliente Exclusivo', minAmount: 10, id: '1553482235284431029' },
+    { name: 'Cliente Especial',  minAmount: 20, id: '1553482359540809889' },
+    { name: 'Cliente Premium',   minAmount: 30, id: '1553482458186514532' },
+    { name: 'Cliente Elite',     minAmount: 50, id: '1553482861754187846' },
+    { name: 'Cliente Black',     minAmount: 100, id: '1553482589501661288' }
+];
 
-            const embedCompra = new EmbedBuilder()
-                .setTitle(`🛒 Solicitud de Compra - LICENCIA ${productType}`)
-                .setDescription(`¡Hola ${interaction.user}! Gracias por tu interés en **ERCHI | OPTIMIZADOR**.\n\n` +
-                                `Por favor, realiza el pago correspondiente y adjunta la captura en este ticket:\n` +
-                                `• **PayPal**: tu_paypal@ejemplo.com\n` +
-                                `• **Bizum**: +34 600 000 000\n\n` +
-                                `Un Administrador verificará el pago para activarte la Key y tus roles automáticamente.`)
-                .setColor('#00FF00');
-
-            const btnCerrar = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId('btn_cerrar_ticket')
-                    .setLabel('Cerrar Ticket')
-                    .setStyle(ButtonStyle.Danger)
-            );
-
-            await canalTicket.send({ content: `<@${interaction.user.id}> <@&${CONFIG.ROL_STAFF}>`, embeds: [embedCompra], components: [btnCerrar] });
-            await interaction.reply({ content: `✅ Ticket de compra creado con éxito: ${canalTicket}`, ephemeral: true });
-
-        } catch (error) {
-            console.error('Error al crear ticket de compra:', error);
-            await interaction.reply({ content: '❌ Hubo un error al intentar crear tu ticket de compra.', ephemeral: true });
-        }
+function loadPurchases() {
+    if (!fs.existsSync(PURCHASES_FILE)) {
+        fs.writeFileSync(PURCHASES_FILE, JSON.stringify({}), 'utf-8');
     }
-});
+    try {
+        return JSON.parse(fs.readFileSync(PURCHASES_FILE, 'utf-8'));
+    } catch (e) {
+        return {};
+    }
+}
+
+function savePurchases(data) {
+    fs.writeFileSync(PURCHASES_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+async function processUserPurchase(guild, userId, purchaseAmount) {
+    const purchases = loadPurchases();
+    const currentTotal = (purchases[userId] || 0) + purchaseAmount;
+    purchases[userId] = currentTotal;
+    savePurchases(purchases);
+
+    try {
+        const member = await guild.members.fetch(userId);
+        if (!member) return;
+
+        const rolesToAdd = ROLE_TIERS
+            .filter(tier => currentTotal >= tier.minAmount)
+            .map(tier => tier.id);
+
+        if (rolesToAdd.length > 0) {
+            await member.roles.add(rolesToAdd);
+            console.log(`[ÉXITO] Roles asignados a ${member.user.tag}. Total acumulado: ${currentTotal}€`);
+        }
+    } catch (error) {
+        console.error(`Error asignando roles a ${userId}:`, error);
+    }
+}
+
 // ===================================================
 // EVENTO: BOT LISTO
 // ===================================================
@@ -141,12 +150,67 @@ client.on('messageCreate', async (message) => {
   }
   dbNiveles.set(userId, userData);
 
+  // --- Comando Setup Tienda ---
+  if (message.content === '!setup-tienda' && message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+        const embedNormal = new EmbedBuilder()
+            .setTitle('⚡ ERCHI | OPTIMIZADOR - LICENCIA NORMAL (10€)')
+            .setDescription('La solución ideal para mejorar el rendimiento básico de tu PC.\n\n' +
+                            '• Limpieza profunda de archivos temporales.\n' +
+                            '• Desactivación de servicios innecesarios de Windows.\n' +
+                            '• Optimización básica de FPS en juegos.')
+            .setColor('#3498db');
+
+        const btnNormal = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('buy_normal')
+                .setLabel('💳 COMPRAR KEY (10€)')
+                .setStyle(ButtonStyle.Primary)
+        );
+
+        const embedPremium = new EmbedBuilder()
+            .setTitle('🔥 ERCHI | OPTIMIZADOR - LICENCIA PREMIUM (20€)')
+            .setDescription('Máximo equilibrio entre rendimiento y optimización del sistema.\n\n' +
+                            '• Todo lo incluido en la versión NORMAL.\n' +
+                            '• Tweaks avanzados de Registro de Windows y Red.\n' +
+                            '• Reducción del Input Lag en periféricos.')
+            .setColor('#2ecc71');
+
+        const btnPremium = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('buy_premium')
+                .setLabel('💳 COMPRAR KEY (20€)')
+                .setStyle(ButtonStyle.Success)
+        );
+
+        const embedUltra = new EmbedBuilder()
+            .setTitle('👑 ERCHI | OPTIMIZADOR - LICENCIA ULTRA (30€)')
+            .setDescription('El paquete definitivo de rendimiento sin limitaciones.\n\n' +
+                            '• Todo lo incluido en la versión PREMIUM.\n' +
+                            '• Acceso al Bypass Creador y soporte prioritario 24/7.\n' +
+                            '• Perfiles de overclock y optimizaciones extremas.')
+            .setColor('#e74c3c');
+
+        const btnUltra = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('buy_ultra')
+                .setLabel('💳 COMPRAR KEY (30€)')
+                .setStyle(ButtonStyle.Danger)
+        );
+
+        await message.channel.send({ embeds: [embedNormal], components: [btnNormal] });
+        await message.channel.send({ embeds: [embedPremium], components: [btnPremium] });
+        await message.channel.send({ embeds: [embedUltra], components: [btnUltra] });
+
+        message.delete();
+        return;
+  }
+
   // --- Comandos con Prefijo ---
   if (!message.content.startsWith(CONFIG.PREFIX)) return;
   const args = message.content.slice(CONFIG.PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
-  const esStaff = message.member.roles.cache.has(CONFIG.ROL_STAFF) || message.member.permissions.has(PermissionsBitField.Flags.Administrator);
+  const esStaff = message.member.roles.cache.has(CONFIG.ROL_STAFF) || message.member.permissions.has(PermissionFlagsBits.Administrator);
 
   // COMANDO: !panel-verificacion (Staff)
   if (command === 'panel-verificacion') {
@@ -226,190 +290,55 @@ client.on('messageCreate', async (message) => {
 // EVENTO: BOTONES E INTERACCIONES
 // ===================================================
 client.on('interactionCreate', async (interaction) => {
-  if (interaction.isButton()) {
-    
-    // --- Botón de Verificación ---
-    if (interaction.customId === 'btn_verificar') {
-      try {
-        const member = interaction.member;
+  if (!interaction.isButton()) return;
 
-        // 1. Asignar rol de miembro
-        if (CONFIG.ROL_MIEMBRO) {
-          await member.roles.add(CONFIG.ROL_MIEMBRO);
-        }
+  // --- Botón de Verificación ---
+  if (interaction.customId === 'btn_verificar') {
+    try {
+      const member = interaction.member;
 
-        // 2. Retirar rol no verificado si lo posee
-        if (CONFIG.ROL_NUEVO_USUARIO && member.roles.cache.has(CONFIG.ROL_NUEVO_USUARIO)) {
-          await member.roles.remove(CONFIG.ROL_NUEVO_USUARIO);
-        }
-
-        await interaction.reply({ content: '✅ Te has verificado correctamente.', ephemeral: true });
-      } catch (err) {
-        console.error('Error al verificar:', err);
-        await interaction.reply({ 
-          content: `❌ Error al asignar roles: ${err.message}`, 
-          ephemeral: true 
-        });
+      if (CONFIG.ROL_MIEMBRO) {
+        await member.roles.add(CONFIG.ROL_MIEMBRO);
       }
-    }
 
-    // --- Botón Crear Ticket ---
-    if (interaction.customId === 'btn_crear_ticket') {
-      try {
-        const canalTicket = await interaction.guild.channels.create({
-          name: `ticket-${interaction.user.username}`,
-          type: ChannelType.GuildText,
-          parent: CONFIG.CATEGORIA_TICKETS || null,
-          permissionOverwrites: [
-            { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-            { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-            { id: CONFIG.ROL_STAFF, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-          ]
-        });
-
-        const embed = new EmbedBuilder()
-          .setTitle(`Ticket de ${interaction.user.username}`)
-          .setDescription('Describe tu consulta aquí. El equipo de Staff te atenderá pronto.')
-          .setColor('#00FF00');
-
-        const btnCerrar = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId('btn_cerrar_ticket')
-            .setLabel('Cerrar Ticket')
-            .setStyle(ButtonStyle.Danger)
-        );
-
-        await canalTicket.send({ content: `<@&${CONFIG.ROL_STAFF}>`, embeds: [embed], components: [btnCerrar] });
-        await interaction.reply({ content: `✅ Ticket creado: ${canalTicket}`, ephemeral: true });
-      } catch (err) {
-        console.error('Error al crear ticket:', err);
-        await interaction.reply({ content: '❌ No se pudo crear el canal de ticket.', ephemeral: true });
+      if (CONFIG.ROL_NUEVO_USUARIO && member.roles.cache.has(CONFIG.ROL_NUEVO_USUARIO)) {
+        await member.roles.remove(CONFIG.ROL_NUEVO_USUARIO);
       }
-    }
 
-    // --- Botón Cerrar Ticket ---
-    if (interaction.customId === 'btn_cerrar_ticket') {
-      await interaction.reply('🔒 El ticket se cerrará en 5 segundos...');
-      setTimeout(() => interaction.channel.delete(), 5000);
+      await interaction.reply({ content: '✅ Te has verificado correctamente.', ephemeral: true });
+    } catch (err) {
+      console.error('Error al verificar:', err);
+      await interaction.reply({ 
+        content: `❌ Error al asignar roles: ${err.message}`, 
+        ephemeral: true 
+      });
     }
   }
-});
 
-// ===================================================
-// INICIO DE SESIÓN
-// ===================================================
-
-
-// ==========================================
-// 1. MÓDULO DE CLIENTES Y ROLES ACUMULATIVOS
-// ==========================================
-const fs = require('fs');
-const path = require('path');
-
-const PURCHASES_FILE = path.join(__dirname, 'purchases.json');
-
-const ROLE_TIERS = [
-    { name: 'Cliente Exclusivo', minAmount: 10, id: '1553482235284431029' },
-    { name: 'Cliente Especial',  minAmount: 20, id: '1553482359540809889' },
-    { name: 'Cliente Premium',   minAmount: 30, id: '1553482458186514532' },
-    { name: 'Cliente Elite',     minAmount: 50, id: '1553482861754187846' },
-    { name: 'Cliente Black',     minAmount: 100, id: '1553482589501661288' }
-];
-
-function loadPurchases() {
-    if (!fs.existsSync(PURCHASES_FILE)) {
-        fs.writeFileSync(PURCHASES_FILE, JSON.stringify({}), 'utf-8');
-    }
-    return JSON.parse(fs.readFileSync(PURCHASES_FILE, 'utf-8'));
-}
-
-function savePurchases(data) {
-    fs.writeFileSync(PURCHASES_FILE, JSON.stringify(data, null, 2), 'utf-8');
-}
-
-async function processUserPurchase(guild, userId, purchaseAmount) {
-    const purchases = loadPurchases();
-    const currentTotal = (purchases[userId] || 0) + purchaseAmount;
-    purchases[userId] = currentTotal;
-    savePurchases(purchases);
-
+  // --- Botón Crear Ticket ---
+  if (interaction.customId === 'btn_crear_ticket') {
     try {
-        const member = await guild.members.fetch(userId);
-        if (!member) return;
+      const canalTicket = await interaction.guild.channels.create({
+        name: `ticket-${interaction.user.username}`,
+        type: ChannelType.GuildText,
+        parent: CONFIG.CATEGORIA_TICKETS || null,
+        permissionOverwrites: [
+          { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+          { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+          { id: CONFIG.ROL_STAFF, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] }
+        ]
+      });
 
-        const rolesToAdd = ROLE_TIERS
-            .filter(tier => currentTotal >= tier.minAmount)
-            .map(tier => tier.id);
+      const embed = new EmbedBuilder()
+        .setTitle(`Ticket de ${interaction.user.username}`)
+        .setDescription('Describe tu consulta aquí. El equipo de Staff te atenderá pronto.')
+        .setColor('#00FF00');
 
-        if (rolesToAdd.length > 0) {
-            await member.roles.add(rolesToAdd);
-            console.log(`[ÉXITO] Roles asignados a ${member.user.tag}. Total acumulado: ${currentTotal}€`);
-        }
-    } catch (error) {
-        console.error(`Error asignando roles a ${userId}:`, error);
-    }
-}
+      const btnCerrar = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('btn_cerrar_ticket')
+          .setLabel('Cerrar Ticket')
+          .setStyle(ButtonStyle.Danger)
+      );
 
-// ==========================================
-// 2. COMANDO PARA PUBLICAR LA TIENDA (!setup-tienda)
-// ==========================================
-client.on('messageCreate', async message => {
-    if (message.content === '!setup-tienda' && message.member.permissions.has('Administrator')) {
-        
-        const embedNormal = new EmbedBuilder()
-            .setTitle('⚡ ERCHI | OPTIMIZADOR - LICENCIA NORMAL (10€)')
-            .setDescription('La solución ideal para mejorar el rendimiento básico de tu PC.\n\n' +
-                            '• Limpieza profunda de archivos temporales.\n' +
-                            '• Desactivación de servicios innecesarios de Windows.\n' +
-                            '• Optimización básica de FPS en juegos.')
-            .setColor('#3498db');
-
-        const btnNormal = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('buy_normal')
-                .setLabel('💳 COMPRAR KEY (10€)')
-                .setStyle(ButtonStyle.Primary)
-        );
-
-        const embedPremium = new EmbedBuilder()
-            .setTitle('🔥 ERCHI | OPTIMIZADOR - LICENCIA PREMIUM (20€)')
-            .setDescription('Máximo equilibrio entre rendimiento y optimización del sistema.\n\n' +
-                            '• Todo lo incluido en la versión NORMAL.\n' +
-                            '• Tweaks avanzados de Registro de Windows y Red.\n' +
-                            '• Reducción del Input Lag en periféricos.')
-            .setColor('#2ecc71');
-
-        const btnPremium = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('buy_premium')
-                .setLabel('💳 COMPRAR KEY (20€)')
-                .setStyle(ButtonStyle.Success)
-        );
-
-        const embedUltra = new EmbedBuilder()
-            .setTitle('👑 ERCHI | OPTIMIZADOR - LICENCIA ULTRA (30€)')
-            .setDescription('El paquete definitivo de rendimiento sin limitaciones.\n\n' +
-                            '• Todo lo incluido en la versión PREMIUM.\n' +
-                            '• Acceso al Bypass Creador y soporte prioritario 24/7.\n' +
-                            '• Perfiles de overclock y optimizaciones extremas.')
-            .setColor('#e74c3c');
-
-        const btnUltra = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('buy_ultra')
-                .setLabel('💳 COMPRAR KEY (30€)')
-                .setStyle(ButtonStyle.Danger)
-        );
-
-        await message.channel.send({ embeds: [embedNormal], components: [btnNormal] });
-        await message.channel.send({ embeds: [embedPremium], components: [btnPremium] });
-        await message.channel.send({ embeds: [embedUltra], components: [btnUltra] });
-
-     message.delete();
-    }
-});
-
-// ==========================================
-// ¡EL LOGIN SIEMPRE AL FINAL ABSOLUTO!
-// ==========================================
-client.login(process.env.DISCORD_TOKEN);
+      await canalTicket.send({ content: `<@&${CONFIG.ROL_STAFF}>`, embeds: [embed], components: [btnCerrar] });
