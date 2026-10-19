@@ -254,7 +254,7 @@ client.on('interactionCreate', async (interaction) => {
 // ===================================================
 // INICIO DE SESIÓN
 // ===================================================
-client.login(CONFIG.TOKEN);
+
 
 // ==========================================
 // 1. MÓDULO DE CLIENTES Y ROLES ACUMULATIVOS
@@ -361,6 +361,11 @@ client.on('messageCreate', async message => {
         await message.channel.send({ embeds: [embedPremium], components: [btnPremium] });
         await message.channel.send({ embeds: [embedUltra], components: [btnUltra] });
 
-        message.delete();
+     message.delete();
     }
 });
+
+// ==========================================
+// ¡EL LOGIN SIEMPRE AL FINAL ABSOLUTO!
+// ==========================================
+client.login(CONFIG.TOKEN);
