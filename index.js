@@ -342,3 +342,62 @@ client.on('interactionCreate', async (interaction) => {
       );
 
       await canalTicket.send({ content: `<@&${CONFIG.ROL_STAFF}>`, embeds: [embed], components: [btnCerrar] });
+      await interaction.reply({ content: `✅ Ticket creado: ${canalTicket}`, ephemeral: true });
+    } catch (err) {
+      console.error('Error al crear ticket:', err);
+      await interaction.reply({ content: '❌ No se pudo crear el canal de ticket.', ephemeral: true });
+    }
+  }
+
+  // --- Botón Compras ---
+  if (interaction.customId.startsWith('buy_')) {
+    const productType = interaction.customId.replace('buy_', '').toUpperCase();
+    
+    try {
+        const canalTicket = await interaction.guild.channels.create({
+            name: `compra-${productType.toLowerCase()}-${interaction.user.username}`,
+            type: ChannelType.GuildText,
+            parent: CONFIG.CATEGORIA_TICKETS || null,
+            permissionOverwrites: [
+                { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+                { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+                { id: CONFIG.ROL_STAFF, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] }
+            ]
+        });
+
+        const embedCompra = new EmbedBuilder()
+            .setTitle(`🛒 Solicitud de Compra - LICENCIA ${productType}`)
+            .setDescription(`¡Hola ${interaction.user}! Gracias por tu interés en **ERCHI | OPTIMIZADOR**.\n\n` +
+                            `Por favor, realiza el pago correspondiente y adjunta la captura en este ticket:\n` +
+                            `• **PayPal**: tu_paypal@ejemplo.com\n` +
+                            `• **Bizum**: +34 600 000 000\n\n` +
+                            `Un Administrador verificará el pago para activarte la Key y tus roles automáticamente.`)
+            .setColor('#00FF00');
+
+        const btnCerrar = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('btn_cerrar_ticket')
+                .setLabel('Cerrar Ticket')
+                .setStyle(ButtonStyle.Danger)
+        );
+
+        await canalTicket.send({ content: `<@${interaction.user.id}> <@&${CONFIG.ROL_STAFF}>`, embeds: [embedCompra], components: [btnCerrar] });
+        await interaction.reply({ content: `✅ Ticket de compra creado con éxito: ${canalTicket}`, ephemeral: true });
+
+    } catch (error) {
+        console.error('Error al crear ticket de compra:', error);
+        await interaction.reply({ content: '❌ Hubo un error al intentar crear tu ticket de compra.', ephemeral: true });
+    }
+  }
+
+  // --- Botón Cerrar Ticket ---
+  if (interaction.customId === 'btn_cerrar_ticket') {
+    await interaction.reply('🔒 El ticket se cerrará en 5 segundos...');
+    setTimeout(() => interaction.channel.delete(), 5000);
+  }
+});
+
+// ==========================================
+// INICIO DE SESIÓN
+// ==========================================
+client.login(process.env.DISCORD_TOKEN);
