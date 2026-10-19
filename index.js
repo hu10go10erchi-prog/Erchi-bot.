@@ -255,3 +255,112 @@ client.on('interactionCreate', async (interaction) => {
 // INICIO DE SESIÓN
 // ===================================================
 client.login(CONFIG.TOKEN);
+
+// ==========================================
+// 1. MÓDULO DE CLIENTES Y ROLES ACUMULATIVOS
+// ==========================================
+const fs = require('fs');
+const path = require('path');
+
+const PURCHASES_FILE = path.join(__dirname, 'purchases.json');
+
+const ROLE_TIERS = [
+    { name: 'Cliente Exclusivo', minAmount: 10, id: '1553482235284431029' },
+    { name: 'Cliente Especial',  minAmount: 20, id: '1553482359540809889' },
+    { name: 'Cliente Premium',   minAmount: 30, id: '1553482458186514532' },
+    { name: 'Cliente Elite',     minAmount: 50, id: '1553482861754187846' },
+    { name: 'Cliente Black',     minAmount: 100, id: '1553482589501661288' }
+];
+
+function loadPurchases() {
+    if (!fs.existsSync(PURCHASES_FILE)) {
+        fs.writeFileSync(PURCHASES_FILE, JSON.stringify({}), 'utf-8');
+    }
+    return JSON.parse(fs.readFileSync(PURCHASES_FILE, 'utf-8'));
+}
+
+function savePurchases(data) {
+    fs.writeFileSync(PURCHASES_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+async function processUserPurchase(guild, userId, purchaseAmount) {
+    const purchases = loadPurchases();
+    const currentTotal = (purchases[userId] || 0) + purchaseAmount;
+    purchases[userId] = currentTotal;
+    savePurchases(purchases);
+
+    try {
+        const member = await guild.members.fetch(userId);
+        if (!member) return;
+
+        const rolesToAdd = ROLE_TIERS
+            .filter(tier => currentTotal >= tier.minAmount)
+            .map(tier => tier.id);
+
+        if (rolesToAdd.length > 0) {
+            await member.roles.add(rolesToAdd);
+            console.log(`[ÉXITO] Roles asignados a ${member.user.tag}. Total acumulado: ${currentTotal}€`);
+        }
+    } catch (error) {
+        console.error(`Error asignando roles a ${userId}:`, error);
+    }
+}
+
+// ==========================================
+// 2. COMANDO PARA PUBLICAR LA TIENDA (!setup-tienda)
+// ==========================================
+client.on('messageCreate', async message => {
+    if (message.content === '!setup-tienda' && message.member.permissions.has('Administrator')) {
+        
+        const embedNormal = new EmbedBuilder()
+            .setTitle('⚡ ERCHI | OPTIMIZADOR - LICENCIA NORMAL (10€)')
+            .setDescription('La solución ideal para mejorar el rendimiento básico de tu PC.\n\n' +
+                            '• Limpieza profunda de archivos temporales.\n' +
+                            '• Desactivación de servicios innecesarios de Windows.\n' +
+                            '• Optimización básica de FPS en juegos.')
+            .setColor('#3498db');
+
+        const btnNormal = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('buy_normal')
+                .setLabel('💳 COMPRAR KEY (10€)')
+                .setStyle(ButtonStyle.Primary)
+        );
+
+        const embedPremium = new EmbedBuilder()
+            .setTitle('🔥 ERCHI | OPTIMIZADOR - LICENCIA PREMIUM (20€)')
+            .setDescription('Máximo equilibrio entre rendimiento y optimización del sistema.\n\n' +
+                            '• Todo lo incluido en la versión NORMAL.\n' +
+                            '• Tweaks avanzados de Registro de Windows y Red.\n' +
+                            '• Reducción del Input Lag en periféricos.')
+            .setColor('#2ecc71');
+
+        const btnPremium = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('buy_premium')
+                .setLabel('💳 COMPRAR KEY (20€)')
+                .setStyle(ButtonStyle.Success)
+        );
+
+        const embedUltra = new EmbedBuilder()
+            .setTitle('👑 ERCHI | OPTIMIZADOR - LICENCIA ULTRA (30€)')
+            .setDescription('El paquete definitivo de rendimiento sin limitaciones.\n\n' +
+                            '• Todo lo incluido en la versión PREMIUM.\n' +
+                            '• Acceso al Bypass Creador y soporte prioritario 24/7.\n' +
+                            '• Perfiles de overclock y optimizaciones extremas.')
+            .setColor('#e74c3c');
+
+        const btnUltra = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('buy_ultra')
+                .setLabel('💳 COMPRAR KEY (30€)')
+                .setStyle(ButtonStyle.Danger)
+        );
+
+        await message.channel.send({ embeds: [embedNormal], components: [btnNormal] });
+        await message.channel.send({ embeds: [embedPremium], components: [btnPremium] });
+        await message.channel.send({ embeds: [embedUltra], components: [btnUltra] });
+
+        message.delete();
+    }
+});
