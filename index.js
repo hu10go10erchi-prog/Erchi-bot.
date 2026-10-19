@@ -1,21 +1,22 @@
 const http = require('http');
+
 const {
-  Client,
-  GatewayIntentBits,
-  EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  ChannelType,
-  PermissionsBitField
+    Client,
+    GatewayIntentBits,
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ChannelType,
+    PermissionFlagsBits
 } = require('discord.js');
 
-// ===================================================
+// ==========================================
 // SERVIDOR HTTP PARA MANTENER VIVO EL BOT EN RENDER
-// ===================================================
+// ==========================================
 http.createServer((req, res) => {
-  res.write("Bot ERCHI activo 24/7 en Render");
-  res.end();
+    res.write("Bot ERCHI activo 24/7 en Render");
+    res.end();
 }).listen(process.env.PORT || 3000);
 
 // ===================================================
