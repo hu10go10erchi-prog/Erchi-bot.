@@ -415,4 +415,4 @@ client.on('messageCreate', async message => {
 // ==========================================
 // ¡EL LOGIN SIEMPRE AL FINAL ABSOLUTO!
 // ==========================================
-client.login(CONFIG.TOKEN);
+client.login(process.env.DISCORD_TOKEN);
