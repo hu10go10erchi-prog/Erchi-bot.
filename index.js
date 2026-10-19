@@ -400,6 +400,9 @@ client.on('interactionCreate', async (interaction) => {
 // ==========================================
 // INICIO DE SESIÓN
 // ==========================================
-client.login(process.env.DISCORD_TOKEN).catch(err => {
-    console.error("❌ ERROR CRÍTICO AL CONECTAR A DISCORD:", err);
+console.log("-> Intentando iniciar sesión con el token...");
+client.login(process.env.DISCORD_TOKEN).then(() => {
+    console.log("-> ¡Login completado con éxito!");
+}).catch(err => {
+    console.error("-> ERROR EN EL LOGIN:", err);
 });
